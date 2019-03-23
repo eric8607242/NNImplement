@@ -1,6 +1,7 @@
 # RNN
 ## Introduction
-This is the simple RNN without any framework(ex. tensorflow, keras, pytorch).And the optimization is SGD.You can use the input file I provided, if you don't, you can just put any contain in the input.txt file.But this is just a simple rnn, it can afford too complex input.
+This is the simple RNN implementation without using any framework(ex. tensorflow, keras, pytorch).It uses SGD optimization.You can use the input file I provided, or just put any content in input.txt file.
+Be aware that this is just a simple RNN, it cannot afford too muxh(and too complex) input.
 
 ## Architecture
 ![](./RNN_architecture.png)

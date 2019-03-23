@@ -2,15 +2,14 @@ import numpy as np
 
 class RNN:
     def __init__(self, hidden_size, learning_rate):
-        """Initialize the RNN model and assign None value to the variable
-
+        """initialize the RNN model and assign None value to the variable
         Args:
             hidden_size(int):hidden size for RNN model
 
         Attributes:
             data(str):training data
-            char_to_index(dict):the mapping between relationship the each char and each index in the chars set 
-            index_to_char(dict):the mapping between relationship the each index and each char in the chars set
+            char_to_index(dict):the mapping relationship between the each char and each index in the chars set 
+            index_to_char(dict):the mapping relationship between the each index and each char in the chars set
             data_size(int):size of the training data
             chars_size(int):the size of the chars set which is the total chars in training data without repeat
             learning_rate(float):learning rate in training step
@@ -32,7 +31,7 @@ class RNN:
         self.bh, self.by = None, None
 
     def _init_weight(self):
-        """Initialize the weight value accrodding for the size of the data and hidden size """
+        """initialize the weight value accrodding for the size of the data and hidden size """
         self.Wxh, self.Whh, self.Why = (
                np.random.rand(self.hidden_size, self.chars_size)*0.01,
                np.random.rand(self.hidden_size, self.hidden_size)*0.01,
@@ -45,7 +44,6 @@ class RNN:
         
     def load_data(self, filename):
         """load the data via the path of the input data
-
         Args:
             filename(str):the path of the input data
         """
@@ -61,7 +59,6 @@ class RNN:
         self._init_weight();
 
         self.data = data
-
 
     def train(self, batch_size, epochs):
         """training model with SGD"""
@@ -129,14 +126,12 @@ class RNN:
 
     def _backward(self, batch_size, state_cache, b_label_ch_id):
         """backwarding
-
         Args:
             state_cache(tuple):all state in the forwarding step
             b_label_ch_id(list):the index of the batch label in char set of the input data
 
         Returns:
             (ndarray):the gradient of each weight
-
         """
         x_state, h_state, y_state, predict_state = state_cache
 
@@ -174,7 +169,6 @@ class RNN:
             
     def _update_weight(self, dparam_list):
         """use SGD to update weight with gradient of each weight
-
         Args:
             dparam_list(list): the list that contains the gradient of each weight
         """
@@ -184,8 +178,8 @@ class RNN:
             param += -self.learning_rate * dparam 
             
     def _chars_to_index(self, chars):
-        """convert a string of characters to the index in the character set
-
+        """convert a list of characters to integer.
+        The mapping relationship is according to the character set constructed by the training data
         Args:
             chars(string):the string will be convert to index
 
@@ -195,8 +189,8 @@ class RNN:
         return [self.char_to_index[ch] for ch in chars]
 
     def _index_to_chars(self, index):
-        """convert a list of integer which is the index of the character to the character in the character set
-
+        """convert a list of integer to characters.
+        The mapping relationship is according to the character set constructed by the training data
         Args:
             index(list):the integer list will be convert to character
 
@@ -207,7 +201,6 @@ class RNN:
     
     def predict(self, seq_len, input_data):
         """predict the sequence 
-
         Args:
             seq_len(int): the length that predict string will be
             input_data(char): the first char to feed into RNN model
