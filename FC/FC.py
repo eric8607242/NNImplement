@@ -21,6 +21,7 @@ class FC:
             b(dict): a dict contained the bias of the each layer
         """
         self.hidden_size = hidden_size
+        self.layers_size = len(self.hidden_size)
         self.reg = reg
         self.learning_rate = learning_rate
         self.std = std
@@ -40,9 +41,10 @@ class FC:
 
     def _init_weight(self):
         pre_layer_size = self.data_size
-        for l in range(len(self.hidden_size)):
+        for l in range(self.layers_size):
             self.W[l] = np.random.normal(0, self.std, (pre_layer_size, self.hidden_size[l]))
             self.b[l] = np.zeros(self.hidden_size[l])
+            pre_layer_size = self.hidden_size[l]
 
         self.output_W = np.random.normal(0, self.std, (self.hidden_size[-1], self.class_num))
         self.output_b = np.zeros(self.class_num)
@@ -82,24 +84,93 @@ class FC:
         self.train_X = self.train_X.reshape(self.train_size, -1)
         self.val_X = self.val_X.reshape(self.val_size, -1)
         self.test_X = self.test_X.reshape(self.test_size, -1)
+
+        self._init_weight()
         
     def _forward(self, X):
         cache= {}
         pre_layer = X
 
-        for l in range(len(self.hidden_size)):
-            cache[]
+        for l in range(self.layers_size):
+            layer = pre_layer.dot(self.W[l]) + self.b[l]
+            relu = np.maximum(layer, 0)
+            pre_layer = relu
+
+            cache["l_"+str(l)] = layer
+            cache["relu_"+str(l)] = relu
+
+        cache["scores"] = pre_layer.dot(self.output_W) + self.output_b
+
+        return cache
            
+    def _backward(self, X, Y, cache):
+        cache["relu_-1"] = X
+        N = X.shape[0]
+        d_cache = {}
 
-    def _backward(self):
-        pass
+        scores = cache["scores"]
+        scores -= np.matrix(np.max(scores, axis=1)).T
+        p = np.exp(scores) / np.sum(np.exp(scores), axis=1).reshape(N, 1)
+        p[np.arange(N), Y] -= -1
+        dloss = p
+ 
+        d_cache["o_W"] = np.dot(cache["relu_"+str(self.layers_size-1)].T, dloss) + self.reg*self.output_W
+        d_cache["o_b"] = np.sum(dloss, axis=0)
 
-    def train(self):
-        pass
+        dscores = np.dot(dloss, self.output_W.T)
+        dout = dscores
+
+        for l in reversed(range(self.layers_size)):
+            drelu = np.zeros_like(cache["relu_"+str(l)])
+            drelu[cache["relu_"+str(l)] > 0] = 1
+            drelu = dout * drelu
+
+            d_cache["W_"+str(l)] = np.dot(cache["relu_" + str(l-1)].T, drelu) + self.reg*self.W[l]
+            d_cache["b_"+str(l)] = np.sum(drelu, axis=0)
+
+            dlayer = np.dot(drelu, self.W[l].T)
+            dout = dlayer
+        return d_cache
+
+    def _update_weight(self, d_cache):
+        for l in range(self.layers_size):
+            self.W[l] += -1*d_cache["W_"+str(l)] * self.learning_rate
+            self.b[l] += -1*d_cache["b_"+str(l)] * self.learning_rate
+
+        self.output_W += -1*d_cache["o_W"] * self.learning_rate
+        self.output_b += -1*d_cache["o_b"] * self.learning_rate
+
+    def train(self, batch_size = 200, epoch = 10):
+        iteration = self.train_size//batch_size
+
+        for e in range(epoch):
+            print("----- epoch %d -----" % e)
+            for i in range(iteration):
+                batch_X = self.train_X[batch_size*i:batch_size*(i+1)]
+                batch_Y = self.train_Y[batch_size*i:batch_size*(i+1)]
+
+                cache = self._forward(batch_X)
+
+                scores = cache["scores"]
+                scores -= np.matrix(np.max(scores, axis=1)).T
+                correct_score = scores[np.arange(batch_size), batch_Y]
+
+                loss = -correct_score + np.log(np.sum(np.exp(scores), axis=1))
+                loss = np.sum(loss)/batch_size
+                for l in range(self.layers_size):
+                    loss += (1/2) * self.reg * (np.sum(self.W[l]*self.W[l]))
+                loss += (1/2) * self.reg * (np.sum(self.output_W*self.output_W))
+
+                if i%20 == 0:
+                    print("Epoch %d ----- Iteration %d ----- Loss %f-----" % (e, i, loss))
+
+                d_cache = self._backward(batch_X, batch_Y, cache)
+                self._update_weight(d_cache)
 
     def predict(self):
         pass
 
 if __name__ == '__main__':
-    fc = FC([10,10,10,10], 1e-4, 1e-4, 1e-1)
+    fc = FC([50, 20], 0.0, 1e-6, 1e-2)
     fc.load_data()
+    fc.train()
