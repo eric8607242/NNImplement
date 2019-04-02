@@ -134,7 +134,6 @@ class FC:
             cache["relu_"+str(l)] = relu
 
         cache["scores"] = pre_layer.dot(self.output_W) + self.output_b
-
         return cache
            
     def _backward(self, X, Y, cache):
@@ -228,7 +227,6 @@ class FC:
             std_range(list): a list which length is 2 indicate the range std will be
             interval(int): the number of fragment range will be spilt
         """
-        
         learning_slice = np.linspace(learning_range[0], learning_range[1], num=interval)
         std_slice = np.linspace(std_range[0], std_range[1], num=interval)
 
@@ -256,7 +254,6 @@ class FC:
         self.std = best_hp["s"]
         self._init_weight()
 
-
     def predict(self, data_set = 0):
         """Predict the accuracy
         Args:
@@ -281,7 +278,6 @@ class FC:
         accuracy = (scores_i == predict_label).mean()
 
         print("----- %s Accuracy ----- %f" % (data_type, accuracy))
-
         return accuracy
     
     def visualize_data(self):
