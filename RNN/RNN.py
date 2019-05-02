@@ -117,7 +117,7 @@ class RNN:
             x_state[b] = np.zeros((self.chars_size, 1))
             x_state[b][b_data_ch_id[b]] = 1
 
-            h_state[b] = np.tanh(np.dot(self.Wxh, x_state[b])+np.dot(self.Whh, hprev))+self.bh
+            h_state[b] = np.tanh(np.dot(self.Wxh, x_state[b])+np.dot(self.Whh, hprev)+self.bh)
             y_state[b] = np.dot(self.Why, h_state[b])+self.by
             predict_state[b] = np.exp(y_state[b]) / np.sum(np.exp(y_state[b]))
             loss += -np.log(predict_state[b][b_label_ch_id[b]])
@@ -160,7 +160,7 @@ class RNN:
             dtanh = (1-h_state[b] * h_state[b]) * dh_state
             
             dWhh += np.dot(dtanh, h_state[b-1].T)
-            dbh += dtanh
+            dbh += np.sum(dtanh, axis=0)
 
             dWxh += np.dot(dtanh, x_state[b].T)
             dhnext = np.dot(self.Whh.T, dtanh)
