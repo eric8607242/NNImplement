@@ -1,27 +1,17 @@
 import pickle
+import matplotlib.pyplot as plt
 import numpy as np
 
 class CNN:
-    def __init__(self, reg, learning_rate, std, fc_layers=[120, 84], conv_layers=None):
+    def __init__(self, reg, learning_rate, std, fc_layers=[100, 100, 100], conv_layers=None):
 
         if conv_layers == None:
             self.conv_layers = [
                         {
                             "name":"conv",
-                            "filter_nums":6,
-                            "filter_size":5,
-                            "padding":0,
-                            "stride":1
-                        },{
-                            "name":"pool",
-                            "filter_size":2,
-                            "padding":0,
-                            "stride":2
-                        },{
-                            "name":"conv",
-                            "filter_nums":16,
-                            "filter_size":5,
-                            "padding":0,
+                            "filter_nums":32,
+                            "filter_size":7,
+                            "padding":(7-1) //2,
                             "stride":1
                         },{
                             "name":"pool",
@@ -39,10 +29,18 @@ class CNN:
         self.std = std
 
         self.data_size = 32*32*3
+        
         self.train_size = 49000
         self.val_size = 1000
         self.test_size = 10000
         self.class_num = 10
+
+        self.beta1 = 0.9
+        self.beta2 = 0.999
+        self.eps = 1e-8
+        self.m = {}
+        self.v = {}
+        self.t = 1
 
         self.train_X, self.train_Y = None, None
         self.val_X, self.val_Y = None, None
@@ -72,7 +70,8 @@ class CNN:
                 self.conv_b[l] = np.zeros(filter_nums)
                 filter_depth = filter_nums
 
-        layer_dim = filter_depth*filter_size*filter_size
+        layer_dim = int(filter_depth*32*32/4)
+        #layer_dim = int(32*32*3)
         for l in range(len(self.fc_layers)):
             self.fc_W[l] = np.random.normal(0.0, self.std, (layer_dim, self.fc_layers[l]))
             self.fc_b[l] = np.zeros(self.fc_layers[l])
@@ -115,6 +114,12 @@ class CNN:
         filename = './cifar-10-batches-py/test_batch'
         self.test_X, self.test_Y = self._load_cifar(filename)
 
+        mean_image = self.train_X.mean()
+        self.train_X -= mean_image
+        self.val_X -= mean_image
+        self.test_X -= mean_image
+
+
 
     def _pooling_forward(self, X, param):
         stride, padding, pooling_size = param
@@ -129,9 +134,8 @@ class CNN:
         for n in range(N):
             for n_h in range(out_H):
                 for n_w in range(out_W):
-                    for c in range(C):
-                        region = X[n, n_h*stride:n_h*stride+pooling_size, n_w*stride:n_w*stride+pooling_size, c]
-                        out[n, n_h, n_w, c] = np.amax(region)
+                    region = X[n, n_h*stride:n_h*stride+pooling_size, n_w*stride:n_w*stride+pooling_size, :]
+                    out[n, n_h, n_w, :] = np.amax(region, axis=(0, 1))
 
         cache = (X, param)
         return out, cache
@@ -172,11 +176,10 @@ class CNN:
         padding_X = np.pad(X, ((0, 0), (padding, padding), (padding, padding), (0, 0)), 'constant')
 
         for n in range(N):
-            for f in range(F):
-                for n_h in range(out_H):
-                    for n_w in range(out_W):
+            for n_h in range(out_H):
+                for n_w in range(out_W):
                         region = padding_X[n, n_h*stride:n_h*stride+f_H, n_w*stride:n_w*stride+f_W, :]
-                        out[n][n_h][n_w][f] = np.sum(region*W[f] + b[f])
+                        out[n, n_h, n_w, :] = np.sum(region*W, axis=(1, 2, 3))+b
 
         cache = (X, W, b, param)
         return out, cache
@@ -199,18 +202,18 @@ class CNN:
         padding_X = np.pad(X, ((0, 0), (padding, padding), (padding, padding), (0, 0)), 'constant')
         dpadding_X = np.zeros_like(padding_X)
 
-
         for n in range(N):
-            for f in range(F):
-                for n_h in range(out_H):
-                    for n_w in range(out_W):
-                        region = padding_X[n, n_h*stride:n_h*stride+f_H, n_w*stride:n_w*stride+f_W, :]
-                        dW[f] += region * dout[n, n_h, n_w, f]
-                        dpadding_X[n, n_h*stride:n_h*stride+f_H, n_w*stride:n_w*stride+f_W, :] += dout[n, n_h, n_w, f] * W[f]
+            for n_h in range(out_H):
+                for n_w in range(out_W):
+                    region = padding_X[n, n_h*stride:n_h*stride+f_H, n_w*stride:n_w*stride+f_W, :]
+                    dW = region * np.sum(dout[n, n_h, n_w, :])
+                    W_transpose = np.transpose(W,(1, 2, 3, 0))
+                    dpadding_X[n, n_h*stride:n_h*stride+f_H, n_w*stride:n_w*stride+f_W, :] = np.sum(dout[n, n_h, n_w, :] * W_transpose, axis=-1)
 
         dX = dpadding_X[:, padding:-padding, padding:-padding, :]
+        cache = (dW, db)
 
-        return dX, dW, db
+        return dX, cache
 
 
     def _backward(self, X, Y, cache):
@@ -224,8 +227,9 @@ class CNN:
         p[np.arange(N), Y] -= 1
         dloss = p/N
 
-        d_cache["output_W"] = np.dot(cache["relu_"+str(len(self.fc_layers)-1)].T , dloss) + self.reg*self.output_W
-        d_cache["output_b"] = np.sum(dloss, axis=0)
+        dW = np.dot(cache["relu_"+str(len(self.fc_layers)-1)].T , dloss) + self.reg*self.output_W
+        db = np.sum(dloss, axis=0)
+        d_cache["output"] = (dW, db)
 
         dscores = np.dot(dloss, self.output_W.T)
         dout = dscores
@@ -235,8 +239,9 @@ class CNN:
             drelu[cache["relu_"+str(l)] > 0] = 1
             drelu = dout * drelu
 
-            d_cache["W_"+str(l)] = np.dot(cache["relu_" + str(l-1)].T, drelu) + self.reg*self.fc_W[l]
-            d_cache["b_"+str(l)] = np.sum(drelu, axis=0)
+            dW = np.dot(cache["relu_" + str(l-1)].T, drelu) + self.reg*self.fc_W[l]
+            db = np.sum(drelu, axis=0)
+            d_cache[l] = (dW, db)
 
             dlayer = np.dot(drelu, self.fc_W[l].T)
             dout = dlayer
@@ -259,9 +264,78 @@ class CNN:
 
 
     def _update_weight(self, learning_rate, d_cache, d_conv_cache):
-        pass
+        for l in range(len(self.fc_layers)): 
+            if "W_"+str(l) not in self.m:
+                self.m["W_"+str(l)] = 0
+            if "W_"+str(l) not in self.v:
+                self.v["W_"+str(l)] = 0
 
-    def train(self, batch_size = 200, epoch = 10):
+            dW, db = d_cache[l]
+
+            m = self.m["W_"+str(l)]
+            v = self.v["W_"+str(l)]
+
+            adam_term = self._adam(m, v, dW)
+
+            self.fc_W[l] -= learning_rate*adam_term
+            self.fc_b[l] += -1*db*learning_rate
+
+            self.m["W_"+str(l)] = m
+            self.v["W_"+str(l)] = v
+
+        for l in range(len(self.conv_layers)):
+            layer = self.conv_layers[l]
+
+            if layer["name"] == "conv":
+                if "Conv_"+str(l) not in self.m:
+                    self.m["Conv_"+str(l)] = 0
+                if "Conv_"+str(l) not in self.v:
+                    self.v["Conv_"+str(l)] = 0
+
+                dW, db = d_conv_cache[l]
+
+                m = self.m["Conv_"+str(l)]
+                v = self.v["Conv_"+str(l)]
+
+                adam_term = self._adam(m, v, dW)
+
+                self.conv_W[l] -= learning_rate*adam_term
+
+                #self.conv_W[l] += -1*dW*learning_rate
+                self.conv_b[l] += -1*db*learning_rate
+
+                self.m["Conv_"+str(l)] = m
+                self.v["Conv_"+str(l)] = v
+
+        if "output_W" not in self.m:
+            self.m["output_W"] = 0
+        if "output_W" not in self.v:
+            self.v["output_W"] = 0
+
+        dW, db = d_cache["output"]
+
+        m = self.m["output_W"]
+        v = self.v["output_W"]
+
+        adam_term = self._adam(m, v, dW)
+
+        self.output_W -= learning_rate*adam_term
+        self.output_b += -1*db*learning_rate
+
+        self.m["output_W"] = m
+        self.v["output_W"] = v
+        self.t += 1
+
+    def _adam(self, m, v, dW):
+        m = self.beta1*m + (1-self.beta1)*dW
+        mt = m/(1-self.beta1**self.t)
+
+        v = self.beta2*v + (1-self.beta2)*(dW**2)
+        vt = v/(1-self.beta2**self.t)
+
+        return mt/(np.sqrt(vt)+self.eps)
+
+    def train(self, batch_size = 50, epoch = 10):
         iteration = self.train_size//batch_size
 
         for e in range(epoch):
@@ -305,7 +379,7 @@ class CNN:
                     loss += 0.5 * self.reg * (np.sum(layer*layer))
                 loss += 0.5 * self.reg * (np.sum(self.output_W*self.output_W))
 
-                if i%200 == 0:
+                if i%20 == 0:
                     print("Epoch %d ----- Iteration %d ----- Loss %f -----" % (e, i, loss))
 
                 dout, d_cache = self._backward(out, batch_Y, fc_cache)
@@ -318,13 +392,34 @@ class CNN:
                     layer = self.conv_layers[l]
 
                     if layer["name"] == "conv":
-                        dout, _, _ = self._conv_backward(dout, conv_cache[l])
+                        dout, d_conv_cache[l]  = self._conv_backward(dout, conv_cache[l])
                     elif layer["name"] == "pool":
                         dout = self._pooling_backward(dout, conv_cache[l])
 
                 self._update_weight(self.learning_rate, d_cache, d_conv_cache)
+            self.learning_rate *= 0.9
                     
+    def visualize_data(self):
+        classes=["airplane", "automobile", "bird", "cat", "deer", "dog", "frog", "horse", "ship", "truck"]
+        sample_numbers = 10
+
+        for y, cls in enumerate(classes):
+            idxs = np.flatnonzero(self.train_Y == y)
+            idxs = idxs[:sample_numbers]
+            pictures = self.train_X[idxs]
+
+            for i in range(sample_numbers):
+                plt_idx = i * sample_numbers + y + 1
+                picture = pictures[i].reshape(32, 32, 3)
+                picture = (picture-picture.min()) / (picture.max()-picture.min())
+
+                plt.subplot(sample_numbers, self.class_num, plt_idx)
+                plt.imshow(picture)
+                plt.axis('off')
+        plt.show()
+
+
 if __name__ == '__main__':
-    cnn = CNN(reg = 0.25, learning_rate = 0.24, std = 1e-2)
+    cnn = CNN(reg = 0.0, learning_rate = 2e-3, std = 1e-2)
     cnn.load_data()
     cnn.train()
