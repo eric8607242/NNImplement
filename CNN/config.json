@@ -1,0 +1,17 @@
+{
+    "conv_layers":[
+                        {
+                            "name":"conv",
+                            "filter_nums":32,
+                            "filter_size":7,
+                            "padding":3,
+                            "stride":1
+                        },{
+                            "name":"pool",
+                            "filter_size":2,
+                            "padding":0,
+                            "stride":2
+                        }
+                    ],
+    "fc_layers": ""
+}

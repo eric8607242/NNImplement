@@ -1,11 +1,50 @@
 import pickle
+import json
 import matplotlib.pyplot as plt
 import numpy as np
 
-class CNN:
-    def __init__(self, reg, learning_rate, std, fc_layers=[100, 100, 100], conv_layers=None):
+CONFIG_PATH = "./config.json"
 
-        if conv_layers == None:
+class CNN:
+    def __init__(self, reg, learning_rate, std):
+        
+        self._load_architecture()
+
+        self.reg = reg
+        self.learning_rate = learning_rate
+        self.std = std
+
+        self.data_size = None
+
+        self.train_size = 49000
+        self.val_size = 1000
+        self.test_size = 10000
+        self.class_num = 10
+
+        self.beta1 = 0.9
+        self.beta2 = 0.999
+        self.eps = 1e-8
+        self.m = {}
+        self.v = {}
+        self.t = 1
+
+        self.train_X, self.train_Y = None, None
+        self.val_X, self.val_Y = None, None
+        self.test_X, self.val_Y = None, None
+
+        self.conv_W, self.conv_b = {}, {}
+        self.fc_W, self.fc_b = {}, {}
+        self.output_W, self.output_b = None, None
+
+    def _load_architecture(self):
+        with open(CONFIG_PATH) as cb:
+            config = json.loads(cb.read())
+
+        conv_layers = config["conv_layers"]
+        fc_layers = config["fc_layers"]
+
+
+        if conv_layers == "":
             self.conv_layers = [
                         {
                             "name":"conv",
@@ -23,44 +62,21 @@ class CNN:
         else:
             self.conv_layers = conv_layers
 
-        self.fc_layers = fc_layers
-        self.reg = reg
-        self.learning_rate = learning_rate
-        self.std = std
-
-        self.data_size = 32*32*3
-        
-        self.train_size = 49000
-        self.val_size = 1000
-        self.test_size = 10000
-        self.class_num = 10
-
-        self.beta1 = 0.9
-        self.beta2 = 0.999
-        self.eps = 1e-8
-        self.m = {}
-        self.v = {}
-        self.t = 1
-
-        self.train_X, self.train_Y = None, None
-        self.val_X, self.val_Y = None, None
-        self.test_X, self.val_Y = None, None
-
-        self.conv_layer_num = 2
-        self.filter_size = 5
-
-        self.conv_W, self.conv_b = {}, {}
-        self.fc_W, self.fc_b = {}, {}
-        self.output_W, self.output_b = None, None
-
-        self._init_weight()
+        if fc_layers == "":
+            self.fc_layers = [100, 100, 100]
+        else:
+            self.fc_layers = fc_layers
 
     def _init_weight(self):
         filter_depth = 3
         filter_nums = None
         filter_size = None
+        input_size = self.data_size
 
         for l in range(len(self.conv_layers)):
+            stride = self.conv_layers[l]["stride"]
+            padding = self.conv_layers[l]["padding"]
+
             if self.conv_layers[l]["name"] == "conv":
                 filter_nums = self.conv_layers[l]["filter_nums"]
                 filter_size = self.conv_layers[l]["filter_size"]
@@ -70,8 +86,13 @@ class CNN:
                 self.conv_b[l] = np.zeros(filter_nums)
                 filter_depth = filter_nums
 
-        layer_dim = int(filter_depth*32*32/4)
-        #layer_dim = int(32*32*3)
+                input_size = int(1 + (input_size+2*padding-filter_size)/stride)
+
+            elif self.conv_layers[l]["name"] == "pool":
+                pooling_size = self.conv_layers[l]["filter_size"]
+                input_size = 1+int(input_size-pooling_size)//stride
+
+        layer_dim = int(input_size**2 * filter_depth)
         for l in range(len(self.fc_layers)):
             self.fc_W[l] = np.random.normal(0.0, self.std, (layer_dim, self.fc_layers[l]))
             self.fc_b[l] = np.zeros(self.fc_layers[l])
@@ -119,6 +140,9 @@ class CNN:
         self.val_X -= mean_image
         self.test_X -= mean_image
 
+        self.data_size = self.train_X.shape[1]
+
+        self._init_weight()
 
 
     def _pooling_forward(self, X, param):
