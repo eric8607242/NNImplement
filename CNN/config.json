@@ -5,7 +5,7 @@
                             "filter_nums":32,
                             "filter_size":7,
                             "padding":3,
-                            "stride":1
+                            "stride":2
                         },{
                             "name":"pool",
                             "filter_size":2,

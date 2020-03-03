@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pickle
 
-class FC:
+class DNN:
     def __init__(self, hidden_size, reg, learning_rate, std):
         """
         Args:
@@ -115,7 +115,7 @@ class FC:
         self._init_weight()
         
     def _forward(self, X):
-        """forwarding of the FC
+        """forwarding of the DNN
         Args:
             X(ndarray): the batch data
 
@@ -137,7 +137,7 @@ class FC:
         return cache
            
     def _backward(self, X, Y, cache):
-        """backward of the FC
+        """backward of the DNN
         Args:
             X(ndarray): the batch data
             X(ndarray): the batch labels
@@ -314,8 +314,8 @@ class FC:
         plt.show()
 
 if __name__ == '__main__':
-    fc = FC([100, 100, 100], 0.0, 2e-3, 1e-2)
+    fc = DNN([100, 100, 100], 0.0, 2e-3, 1e-2)
     fc.load_data()
-    fc.tuning_hyperparameter([1e-6, 1e-2], [1e-3, 1e-1])
+    #fc.tuning_hyperparameter([1e-6, 1e-2], [1e-3, 1e-1])
     fc.train()
     fc.predict()

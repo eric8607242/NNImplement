@@ -359,7 +359,7 @@ class CNN:
 
         return mt/(np.sqrt(vt)+self.eps)
 
-    def train(self, batch_size = 50, epoch = 10):
+    def train(self, batch_size = 64, epoch = 1):
         iteration = self.train_size//batch_size
 
         for e in range(epoch):
